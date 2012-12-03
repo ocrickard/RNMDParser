@@ -280,4 +280,124 @@ static CGFloat kDefaultFontSize = 15.f;
     return combinedString;
 }
 
+
+- (NSString *)generatePDFFromMarkdownInDocumentsDirectory {
+    //create a CFUUID - it knows how to create unique identifiers
+    CFUUIDRef newUniqueID = CFUUIDCreate (kCFAllocatorDefault);
+    
+    //create a string from unique identifier
+    NSString * newUniqueIDString = (__bridge NSString *)CFUUIDCreateString(kCFAllocatorDefault, newUniqueID);
+    
+    NSString *fileName = [NSString stringWithFormat:@"%@.pdf", newUniqueIDString];
+    
+    CFRelease(newUniqueID);
+    CFRelease((__bridge CFTypeRef)(newUniqueIDString));
+    
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    
+    NSString *filePath = [paths[0] stringByAppendingFormat:@"/%@", fileName];
+    
+    [self generatePDFFromMarkdownAtPath:filePath];
+    
+    return filePath;
+    
+}
+
+- (BOOL)generatePDFFromMarkdownAtPath:(NSString *)path {
+    NSString *newFilePath = path;
+    
+    int fontSize = 12;
+    NSString *font = @"Verdana";
+    UIColor *color = [UIColor blackColor];
+    
+    //    NSString *content = str;
+    
+    int DOC_WIDTH = 612;
+    int DOC_HEIGHT = 792;
+    int LEFT_MARGIN = 50;
+    int RIGHT_MARGIN = 50;
+    int TOP_MARGIN = 50;
+    int BOTTOM_MARGIN = 50;
+    
+    int CURRENT_TOP_MARGIN = TOP_MARGIN;
+    
+    //You can make the first page have a different top margin to place headers, etc.
+    int FIRST_PAGE_TOP_MARGIN = TOP_MARGIN;
+    
+    CGRect a4Page = CGRectMake(0, 0, DOC_WIDTH, DOC_HEIGHT);
+    
+    NSDictionary *fileMetaData = [[NSDictionary alloc] init];
+    
+    if (!UIGraphicsBeginPDFContextToFile(newFilePath, a4Page, fileMetaData )) {
+        NSLog(@"error creating PDF context");
+        return NO;
+    }
+    
+    BOOL done = NO;
+    
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    
+    CFRange currentRange = CFRangeMake(0, 0);
+    
+    CGContextSetTextDrawingMode (context, kCGTextFill);
+    CGContextSelectFont (context, [font cStringUsingEncoding:NSUTF8StringEncoding], fontSize, kCGEncodingMacRoman);
+    CGContextSetFillColorWithColor(context, [color CGColor]);
+    // Initialize an attributed string.
+    CFAttributedStringRef attrString = (__bridge CFAttributedStringRef)[self markdownAttributedString];
+    
+    // Create the framesetter with the attributed string.
+    CTFramesetterRef framesetter = CTFramesetterCreateWithAttributedString(attrString);
+    
+    int pageCount = 1;
+    
+    do {
+        UIGraphicsBeginPDFPage();
+        
+        CGMutablePathRef path = CGPathCreateMutable();
+        
+        if(pageCount == 1) {
+            CURRENT_TOP_MARGIN = FIRST_PAGE_TOP_MARGIN;
+        } else {
+            CURRENT_TOP_MARGIN = TOP_MARGIN;
+        }
+        
+        CGRect bounds = CGRectMake(LEFT_MARGIN,
+                                   CURRENT_TOP_MARGIN,
+                                   DOC_WIDTH - RIGHT_MARGIN - LEFT_MARGIN,
+                                   DOC_HEIGHT - CURRENT_TOP_MARGIN - BOTTOM_MARGIN);
+        
+        CGPathAddRect(path, NULL, bounds);
+        
+        // Create the frame and draw it into the graphics context
+        CTFrameRef frame = CTFramesetterCreateFrame(framesetter, currentRange, path, NULL);
+        
+        if(frame) {
+            CGContextSaveGState(context);
+            CGContextTranslateCTM(context, 0, bounds.origin.y);
+            CGContextScaleCTM(context, 1, -1);
+            CGContextTranslateCTM(context, 0, -(bounds.origin.y + bounds.size.height));
+            CTFrameDraw(frame, context);
+            CGContextRestoreGState(context);
+            
+            // Update the current range based on what was drawn.
+            currentRange = CTFrameGetVisibleStringRange(frame);
+            currentRange.location += currentRange.length;
+            currentRange.length = 0;
+            
+            CFRelease(frame);
+        }
+        
+        // If we're at the end of the text, exit the loop.
+        if (currentRange.location == CFAttributedStringGetLength(attrString))
+            done = YES;
+        
+        pageCount++;
+    } while(!done);
+    
+    UIGraphicsEndPDFContext();
+    CFRelease(framesetter);
+    
+    return YES;
+}
+
 @end

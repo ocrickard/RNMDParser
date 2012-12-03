@@ -12,4 +12,8 @@
 
 - (NSAttributedString*)markdownAttributedString;
 
+- (NSString *)generatePDFFromMarkdownInDocumentsDirectory;
+
+- (BOOL)generatePDFFromMarkdownAtPath:(NSString *)path;
+
 @end
