@@ -97,22 +97,57 @@ static CGFloat kDefaultFontSize = 15.f;
     NSMutableAttributedString *aString = [self mutableCopy];
     
     NSError *error = nil;
-    NSRegularExpression *regex = [[NSRegularExpression alloc] initWithPattern:@"^#+[\\s*](.*)$" options:NSRegularExpressionCaseInsensitive|NSRegularExpressionDotMatchesLineSeparators error:&error];
+    NSRegularExpression *regex = [[NSRegularExpression alloc] initWithPattern:@"^>+\\s*(.*)$" options:NSRegularExpressionCaseInsensitive|NSRegularExpressionDotMatchesLineSeparators error:&error];
     NSArray *matches = [regex matchesInString:self.string options:kNilOptions range:NSMakeRange(0, [self.string length])];
     
     if ([matches count] > 0) {
         // get count of occurence of # character
         NSError *countError = nil;
-        NSRegularExpression *countRegex = [[NSRegularExpression alloc] initWithPattern:@"#" options:NSRegularExpressionCaseInsensitive|NSRegularExpressionDotMatchesLineSeparators error:&countError];
+        NSRegularExpression *countRegex = [[NSRegularExpression alloc] initWithPattern:@">" options:NSRegularExpressionCaseInsensitive|NSRegularExpressionDotMatchesLineSeparators error:&countError];
         NSArray *countMatches = [countRegex matchesInString:self.string options:kNilOptions range:NSMakeRange(0, [self.string length])];
-        NSInteger headerCount = [countMatches count];
-        CGFloat headerSize = kDefaultFontSize + 4.f * (6.f / (float)headerCount);
+        NSInteger quoteCount = [countMatches count];
         
-        UIFont *font = [UIFont boldSystemFontOfSize:headerSize];
-        CTFontRef styledFontRef = CTFontCreateWithName((__bridge CFStringRef)font.fontName, font.pointSize, NULL);
-        [aString addAttribute:(NSString*)kCTFontAttributeName value:(__bridge id)styledFontRef range:NSMakeRange(0, [self.string length])];
+        [aString.mutableString replaceOccurrencesOfString:@">" withString:@"" options:kNilOptions range:NSMakeRange(0, [self.string length])];
         
-        [aString.mutableString replaceOccurrencesOfString:@"#" withString:@"" options:kNilOptions range:NSMakeRange(0, [self.string length])];
+        // dimensions just from example on SO
+        CTTextAlignment alignment = kCTLeftTextAlignment;
+        CGFloat paragraphSpacing = 0.0;
+        CGFloat paragraphSpacingBefore = 0.0;
+        CGFloat firstLineHeadIndent = quoteCount * 15.0;
+        CGFloat headIndent = firstLineHeadIndent;
+        
+        CGFloat firstTabStop = 15.0;
+        CGFloat lineSpacing = 0.45;
+        
+        CTTextTabRef tabArray[] = { CTTextTabCreate(0, firstTabStop, NULL) };
+        
+        CFArrayRef tabStops = CFArrayCreate( kCFAllocatorDefault, (const void**) tabArray, 1, &kCFTypeArrayCallBacks );
+        CFRelease(tabArray[0]);
+        
+        CTParagraphStyleSetting altSettings[] =
+        {
+            { kCTParagraphStyleSpecifierLineSpacing, sizeof(CGFloat), &lineSpacing},
+            { kCTParagraphStyleSpecifierAlignment, sizeof(CTTextAlignment), &alignment},
+            { kCTParagraphStyleSpecifierFirstLineHeadIndent, sizeof(CGFloat), &firstLineHeadIndent},
+            { kCTParagraphStyleSpecifierHeadIndent, sizeof(CGFloat), &headIndent},
+            { kCTParagraphStyleSpecifierTabStops, sizeof(CFArrayRef), &tabStops},
+            { kCTParagraphStyleSpecifierParagraphSpacing, sizeof(CGFloat), &paragraphSpacing},
+            { kCTParagraphStyleSpecifierParagraphSpacingBefore, sizeof(CGFloat), &paragraphSpacingBefore}
+        };
+        
+        CTParagraphStyleRef style;
+        style = CTParagraphStyleCreate( altSettings, sizeof(altSettings) / sizeof(CTParagraphStyleSetting) );
+        
+        if ( style == NULL )
+        {
+            NSLog(@"*** Unable To Create CTParagraphStyle in apply paragraph formatting" );
+            return nil;
+        }
+        
+        [aString addAttribute:(NSString*)kCTParagraphStyleAttributeName value:(__bridge id)style range:NSMakeRange(0, [aString.mutableString length])];
+        
+        CFRelease(tabStops);
+        CFRelease(style);
     }
     
     if (error) {
@@ -269,9 +304,9 @@ static CGFloat kDefaultFontSize = 15.f;
         NSAttributedString *olString = [ulString formattedOrderedList];
         NSAttributedString *boldString = [olString formattedBold];
         NSAttributedString *italicString = [boldString formattedItalic];
-        NSAttributedString *urlString = [italicString formattedLink];
+        NSAttributedString *blockQuoteString = [urlString formattedBlockquote];
         
-        NSAttributedString *completedString = urlString;
+        NSAttributedString *completedString = blockQuoteString;
         [combinedString appendAttributedString:completedString];
         // re-add new line
         [combinedString appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n"]];
